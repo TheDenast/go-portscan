@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,24 +43,29 @@ func main() {
 
 	fmt.Printf("Scanning %v (ports %v-%v)...\n", ip, firstPort, lastPort)
 
-	var wg sync.WaitGroup
+	var wg sync.WaitGroup // Wait group used to not exit prematurely before all goroutines finish
+	var openPorts []int   // Array of open ports that we can sort and display nicely later
+	var mu sync.Mutex     // Mutex used to prevent goroutines from overwriting eachother in arrays
+
+	timeout := time.Second
 
 	for currentPort := firstPort; currentPort <= lastPort; currentPort++ {
-		timeout := time.Second
 		portString := strconv.Itoa(currentPort)
 
 		wg.Go(func() {
-			testPort(ip, portString, timeout)
+			conn, _ := net.DialTimeout("tcp", net.JoinHostPort(ip, portString), timeout)
+			if conn != nil {
+				conn.Close()
+				mu.Lock()
+				openPorts = append(openPorts, currentPort)
+				mu.Unlock()
+			}
 		})
-
 	}
 	wg.Wait()
-}
 
-func testPort(ip string, port string, timeout time.Duration) {
-	conn, _ := net.DialTimeout("tcp", net.JoinHostPort(ip, port), timeout)
-	if conn != nil {
-		conn.Close()
-		fmt.Printf("[open] %v/tcp\n", port)
+	sort.Ints(openPorts)
+	for _, p := range openPorts {
+		fmt.Printf("[open] %d/tcp\n", p)
 	}
 }
