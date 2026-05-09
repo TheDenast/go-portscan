@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -41,14 +42,24 @@ func main() {
 
 	fmt.Printf("Scanning %v (ports %v-%v)...\n", ip, firstPort, lastPort)
 
+	var wg sync.WaitGroup
+
 	for currentPort := firstPort; currentPort <= lastPort; currentPort++ {
 		timeout := time.Second
 		portString := strconv.Itoa(currentPort)
-		conn, _ := net.DialTimeout("tcp", net.JoinHostPort(ip, portString), timeout)
-		if conn != nil {
-			conn.Close()
-			fmt.Printf("[open] %v/tcp\n", currentPort)
-		}
 
+		wg.Go(func() {
+			testPort(ip, portString, timeout)
+		})
+
+	}
+	wg.Wait()
+}
+
+func testPort(ip string, port string, timeout time.Duration) {
+	conn, _ := net.DialTimeout("tcp", net.JoinHostPort(ip, port), timeout)
+	if conn != nil {
+		conn.Close()
+		fmt.Printf("[open] %v/tcp\n", port)
 	}
 }
